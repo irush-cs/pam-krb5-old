@@ -106,6 +106,7 @@ struct pam_config {
     char *ccache_dir;        /* Directory for ticket cache. */
     bool no_ccache;          /* Don't create a ticket cache. */
     bool retain_after_close; /* Don't destroy the cache on session end. */
+    bool suid_ccache;        /* Call seteuid for final ccache creation. */
 
     /* The authentication context, which bundles together Kerberos data. */
     struct context *ctx;

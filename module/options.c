@@ -63,6 +63,7 @@ static const struct option options[] = {
     { K(retain_after_close), true,  BOOL   (false) },
     { K(search_k5login),     true,  BOOL   (false) },
     { K(silent),             false, BOOL   (false) },
+    { K(suid_ccache),        false, BOOL   (false) },
     { K(ticket_lifetime),    true,  TIME   (0)     },
     { K(trace),              false, STRING (NULL)  },
     { K(try_first_pass),     false, BOOL   (false) },

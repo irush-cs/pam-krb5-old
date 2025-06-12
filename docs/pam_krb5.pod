@@ -920,6 +920,16 @@ F</tmp>.
 This option can be set in C<[appdefaults]> in F<krb5.conf> and is only
 applicable to the auth and session groups.
 
+=item suid_ccache
+
+When creating final ccache, call seteuid. This helps creating caches in the
+proper location for C<KEYRING:persistent> cache types. Note that
+C<KEYRING:user> might not work (as it's deleted immediately), and
+C<KEYRING:session> can work without suid_ccache.
+
+This option might cause other issues, so sould be enabled with care and not by
+default.
+
 =back
 
 =head1 ENVIRONMENT

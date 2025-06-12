@@ -417,7 +417,70 @@ pamk5_setcred(struct pam_args *args, bool refresh)
      * assumption that the default cache type is FILE; otherwise, due to the
      * type prefix, we'd end up with an invalid path.
      */
-    pamret = cache_init_from_cache(args, cache_name, ctx->cache, &cache);
+    if (args->config->suid_ccache && geteuid() != uid) {
+
+        /*
+         * to avoid messing with the temporary cache, as it needs to be
+         * readable after dropping uid, we create another temporary cache and
+         * use that.
+         */
+        const char *k5name = NULL;
+        char *suid_cache_name = NULL;
+        krb5_ccache suid_cache = NULL;
+        uid_t savedeuid = geteuid();
+
+        k5name = krb5_cc_get_name(ctx->context, ctx->cache);
+        if (k5name == NULL) {
+            putil_crit(args, "can't get name of temporary cache to copy");
+            pamret = PAM_SERVICE_ERR;
+            goto done;
+        }
+        status = asprintf(&suid_cache_name, "%s.suid", k5name);
+        if (status < 0) {
+            putil_crit(args, "malloc failure: %s", strerror(errno));
+            pamret = PAM_BUF_ERR;
+            goto done;
+        }
+
+        /* create a temprary suid file cache */
+        pamret = cache_init_from_cache(args, suid_cache_name, ctx->cache, &suid_cache);
+        if (pamret != PAM_SUCCESS) {
+            free(suid_cache_name);
+            goto done;
+        }
+
+        status = chown(suid_cache_name, uid, gid);
+        if (status == -1) {
+            putil_crit(args, "chown of temporary suid ticket cache failed: %s", strerror(errno));
+            krb5_cc_destroy(ctx->context, suid_cache);
+            free(suid_cache_name);
+            pamret = PAM_SERVICE_ERR;
+            goto done;
+        }
+
+        putil_debug(args, "setting euid to %i for cache creation", uid);
+        if (seteuid(uid) != 0) {
+            putil_notice(args, "can't seteuid for cache (%s), ignoring", strerror(errno));
+        }
+        putil_debug(args, "setting euid to %i for cache creation, we're now %i", uid, geteuid());
+
+        pamret = cache_init_from_cache(args, cache_name, suid_cache, &cache);
+
+        if (geteuid() != savedeuid) {
+            if (seteuid(savedeuid) != 0) {
+                putil_crit(args, "Can't seteuid back from %d: %s", geteuid(), strerror(errno));
+                krb5_cc_destroy(ctx->context, suid_cache);
+                free(suid_cache_name);
+                pamret = PAM_SERVICE_ERR;
+                goto done;
+            }
+        }
+
+        krb5_cc_destroy(ctx->context, suid_cache);
+        free(suid_cache_name);
+    } else {
+        pamret = cache_init_from_cache(args, cache_name, ctx->cache, &cache);
+    }
     if (pamret != PAM_SUCCESS)
         goto done;
     if (strncmp(cache_name, "FILE:", strlen("FILE:")) == 0)
